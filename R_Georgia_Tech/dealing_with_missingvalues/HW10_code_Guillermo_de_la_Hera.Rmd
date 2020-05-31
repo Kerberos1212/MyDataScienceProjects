@@ -1,0 +1,247 @@
+---
+title: "HOMEWORK 10. ISYE 6501"
+author: "Guillermo de la Hera Casado"
+date: "October 27th, 2019"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(include=FALSE)
+```
+
+
+```{r}
+library(ggplot2)
+library(ggcorrplot)
+library(mice)
+library(VIM)
+library(DAAG)
+library(GGally)
+library(caTools)
+library(kknn)
+```
+
+
+# Question 14.1
+
+## Exploring the missing values
+
+Let's first load the breast cancer data:
+
+* The first column (sample code number) it's not of interest for our classification models. Therefore we will exclude it. 
+* The *class* variable is 2 for benign, 4 for malignant. Let's make it become 0 for benign, 1 for malignant.
+
+```{r include = TRUE}
+set.seed(101) # Set Seed so that same sample can be reproduced in future also
+breastC <- read.table("breast-cancer-wisconsin.data.txt", header = FALSE, 
+                      col.names = c("sample_code",
+                                   "clump_thick", "uni_cellsize", "uni_cellshape",
+                                   "marg_adhesion", "epi_cellsize", "bare_nuclei", 
+                                   "bland_chro", "normal_nucleoli", "mitoses","type"),sep = ",")
+breastC <- breastC[,2:ncol(breastC)]
+breastC$type <- apply(breastC, 1, function(x) {ifelse(x[10] == 2, 0, 1)})
+head(breastC)
+str(breastC)
+```
+
+We can identify quite easily that something is going on with column: **bare_nuclei**. It gets the value: *?* for some of the observations. Let's give to these rows value = NA as it may be easier to work with it:
+
+```{r include = TRUE}
+breastC$bare_nuclei <- apply(breastC, 1, function(x) {ifelse(x[6] == "?", NA, as.integer(x[6]))})
+```
+
+Let's now explore where the missing values are and the percentage out of total observations. For that task, we will use **MICE** library, that stands for *Multivariate Imputation by Chained Equations* and also **VIM**, that stands for *Visualization and Imputation of Missing Values*:
+
+```{r include = TRUE}
+mice_plot <- aggr(breastC, col=c('navyblue','yellow'),
+                    numbers=TRUE, sortVars=TRUE,
+                    labels=names(breastC), cex.axis=.7,
+                    gap=3, ylab=c("Missing data","Pattern"))
+```
+
+From the results, we can see that the only column with missing values is *bare_nuclei* and the percentage of missing values is only **2.3%**. As we learnt from the lectures, a value of 5% or higher missing data points would require further investigation and question the validity of the imputation. Since the value is smaller than 5%, we can move forward and explore imputation methods.
+
+With regards to whether there is any bias on the missing values, we could start by looking at the relationship between the missing values and the class:
+
+```{r include = TRUE}
+prop.table(table(breastC$bare_nuclei, breastC$type, useNA="ifany"),1)
+```
+
+As we can see, there is no clear bias on NA values towards a specific class. *Bare_nuclei* mode is: 1, and shows a majority of benign observations. NA distribution just follows the same logic.
+
+What about the row indexes for the missing values? It doesn't look like the rows with empty values are consecutive or follow a pattern; 
+
+```{r include = TRUE}
+na_index <- which(is.na(breastC$bare_nuclei))
+na_index
+```
+
+
+## Use the mean/mode imputation 
+From the data structure we could infer that our predictors take values from 1 to 10 and would be likely categorical and not continuous. From the documentation it's not clear whether there is any ordering. For these reasons I have decided to use the mode as imputation method. Let's work out the mode and assign it to the missing values:
+
+```{r include = TRUE}
+table(breastC$bare_nuclei)
+breastC_mode <- data.frame(breastC)
+breastC_mode[na_index,6] <- 1
+breastC_mode[na_index,6]
+```
+
+As we can see now, **we have made all the 16 missing values = 1**, that is the mode.
+
+Let's look at the performance for this imputation method. As measure for success I have chosen *recall (sensitivity)*. The reason why is that in this context **we want to minimize False Negatives** (patient with breast cancer being incorrectly diagnosed as benign). The formula is: TP / (TP+FN)
+
+If we use KKNN as classification algorithm, we will find out during validation that the best combination is k=7 and a triangular kernel. If we use this configuration on the whole training set to predict the test set, we will find out that **recall is 100% and accuracy =  97.1%**
+
+```{r include = TRUE}
+sample <- sample.split(breastC_mode$type, SplitRatio = 0.8)
+trainSet <- subset(breastC_mode, sample == TRUE)
+testSet <- subset(breastC_mode, sample == FALSE)
+
+valModel<- train.kknn(as.factor(type)~., trainSet, kmax=40,
+                      kernel = c("triangular", "rectangular","epanechnikov", "optimal"),
+                      scale=FALSE, distance=2)
+print(valModel$best.parameters$kernel)
+print(valModel$best.parameters$k)
+
+model <- kknn(as.factor(type)~., train=trainSet, 
+              test = testSet, kernel = "triangular", k=7, scale = FALSE, distance=2)
+caret::confusionMatrix(table(model$fit, testSet$type), positive = "1")
+```
+
+
+## Use regression to input values from the missing data
+
+Let's take the class variable out of the predictors, so that it's not used for the imputation. Otherwise we would be introducing bias at the time of determining the quality of the model.
+
+We will build a linear regression with the remaining variables, being *bare_nuclei* the response. We will be careful to use for training the model the instances where data is not missing, and then use the model to predict the values for the missing instances.
+
+```{r include = TRUE}
+breastC_reg <- data.frame(breastC[,1:9])
+breastC_regper <- data.frame(breastC[,1:9])
+
+breastLM <- lm(formula = bare_nuclei~., data = breastC_reg[-na_index,])
+summary(breastLM)
+predicted <- predict(breastLM, breastC_reg[na_index,])
+breastC_reg[na_index, 6] <- round(predicted,0)
+breastC_reg[na_index,6]
+breastC_reg$type <- breastC[,10]
+```
+
+As we can see now, we have assigned to each one of the 16 missing values the result of the linear regression model, rounding up so it's an integer between 1 and 10.
+
+Looking at the validation phase, it advises a triangular kernel with 10 neighbours. If we check the final performance of this method, **it provides a very similar performance when compared to mean/mode imputation.**
+
+```{r include = TRUE}
+sample <- sample.split(breastC_reg$type, SplitRatio = 0.8)
+trainSet <- subset(breastC_reg, sample == TRUE)
+testSet <- subset(breastC_reg, sample == FALSE)
+
+valModel<- train.kknn(as.factor(type)~., trainSet, kmax=40,
+                      kernel = c("triangular", "rectangular","epanechnikov", "optimal"),
+                      scale=FALSE, distance=2)
+print(valModel$best.parameters$kernel)
+print(valModel$best.parameters$k)
+
+model <- kknn(as.factor(type)~., train=trainSet, 
+              test = testSet, kernel = "triangular", k=10, scale = FALSE, distance=2)
+caret::confusionMatrix(table(model$fit, testSet$type), positive = "1")
+```
+
+## Use regression with perturbation to input values from the missing data
+
+As explained during office hours we will use a random normal distribution in which the predicted values are the means and the standard deviation is the standard deviation of the predicted values. We will use the *rnorm* function.
+
+Applying the perturbation makes some values become zero or negative, for those, we adjust to value = 1, as we want all to be in the range [1-10]
+
+```{r include = TRUE}
+sd(predicted)
+norm_per <- round(rnorm(length(na_index),predicted, sd(predicted)),0)
+norm_per
+norm_per <- sapply(norm_per, function(x) {ifelse(x <= 0, 1, x)})
+breastC_regper[na_index,6] <- norm_per
+breastC_regper[na_index,6]
+breastC_regper$type <- breastC[,10]
+```
+
+Looking at the validation phase, it advises a triangular kernel with 10 neighbours. **If we check the final performance of this method, it provides a bit better accuracy (98.5%), but at the cost of dropping recall from 100% to 97.9%**
+
+```{r include = TRUE}
+sample <- sample.split(breastC_regper$type, SplitRatio = 0.8)
+trainSet <- subset(breastC_regper, sample == TRUE)
+testSet <- subset(breastC_regper, sample == FALSE)
+
+valModel<- train.kknn(as.factor(type)~., trainSet, kmax=40,
+                      kernel = c("triangular", "rectangular","epanechnikov", "optimal"),
+                      scale=FALSE, distance=2)
+print(valModel$best.parameters$kernel)
+print(valModel$best.parameters$k)
+
+model <- kknn(as.factor(type)~., train=trainSet, 
+              test = testSet, kernel = "triangular", k=10, scale = FALSE, distance=2)
+caret::confusionMatrix(table(model$fit, testSet$type), positive = "1")
+```
+
+## Take data that remains when missing values are removed
+
+It's quite straightforward to remove the rows where there is missing values.
+
+Looking at the validation phase, it advises a triangular kernel with 9 neighbours. **If we check the final performance of this method, it provides the worst accuracy (96.3%) and the worst recall (0.937)**
+
+**The big learning here is to be careful when dropping rows due to empty values. The other predictors that have valid figures may be very relevant to predict the response and by dropping rows we are providing the model with less predictive power.**
+
+```{r include = TRUE}
+breastC_del <- data.frame(breastC)
+breastC_del <- breastC_del[-na_index,]
+
+sample <- sample.split(breastC_del$type, SplitRatio = 0.8)
+trainSet <- subset(breastC_del, sample == TRUE)
+testSet <- subset(breastC_del, sample == FALSE)
+
+valModel<- train.kknn(as.factor(type)~., trainSet, kmax=40,
+                      kernel = c("triangular", "rectangular","epanechnikov", "optimal"),
+                      scale=FALSE, distance=2)
+print(valModel$best.parameters$kernel)
+print(valModel$best.parameters$k)
+
+model <- kknn(as.factor(type)~., train=trainSet, 
+              test = testSet, kernel = "triangular", k=9, scale = FALSE, distance=2)
+caret::confusionMatrix(table(model$fit, testSet$type), positive = "1")
+```
+
+
+## Use a binary variable to indicate when data is missing
+
+We will create a new binary variable called *isMissing*. It will be equal to one when *bare_nuclei* value is NA, or zero otherwise.
+In this case we need to scale the data, since we are introducing a new predictor that is not anymore in the range [1,10]
+We also need to specify *bare_nuclei* equal to 0 in the cases when it's NA. Otherwise, kknn function doesn't support NA values during prediction.
+
+Looking at the validation phase, it advises a triangular kernel with 30 neighbours. **If we check the final performance of this method, it provides also a worse accuracy (95.7%) and recall (0.937)**
+
+```{r include = TRUE}
+breastC_bin <- data.frame(breastC)
+breastC_bin$isMissing <- apply(breastC_bin, 1, function(x) {ifelse(is.na(x[6]), 1, 0)})
+breastC_bin[na_index,6] <- 0
+sample <- sample.split(breastC_bin$type, SplitRatio = 0.8)
+trainSet <- subset(breastC_bin, sample == TRUE)
+testSet <- subset(breastC_bin, sample == FALSE)
+valModel<- train.kknn(as.factor(type)~., trainSet, kmax=40,
+                      kernel = c("triangular", "rectangular","epanechnikov", "optimal"),
+                      scale=TRUE, distance=2)
+print(valModel$best.parameters$kernel)
+print(valModel$best.parameters$k)
+model <- kknn(as.factor(type)~., train=trainSet, 
+              test = testSet, kernel = "triangular", k=30, scale = TRUE, distance=2)
+caret::confusionMatrix(table(model$fit, testSet$type), positive = "1")
+```
+
+
+# Question 15.1. Describe a real life situation in which optimization would be appropiate.
+
+Optimization is very applicable to marketing campaigns. There is usually:
+
+* Few variables to optimize e.g. outbound agent performance, number of campaigns...
+* Constraints: total budget for campaigns, maximum number of agents available....
+* Function to optimize: it could be based on revenue maximization. 
+
+It would be really valuable to implement it in my current company, as everyone wants to obtain the maximum revenue out of marketing activities at the lowest budget.

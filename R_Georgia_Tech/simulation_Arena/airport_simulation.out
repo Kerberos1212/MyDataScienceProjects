@@ -1,0 +1,92 @@
+SIMAN Run Controller.
+
+992.96736 Minutes>
+                                      ARENA Simulation Results
+                                     gcasado6 - License: STUDENT
+
+                                  Summary for Replication 1 of 100
+
+Project: Unnamed Project                                             Run execution date :10/23/2019
+Analyst: gcasado6                                                    Model revision date:10/23/2019
+
+Replication ended at time      : 992.96736 Minutes 
+Base Time Units: Minutes
+
+                                           TALLY VARIABLES
+
+Identifier                                  Average   Half Width  Minimum    Maximum   Observations
+___________________________________________________________________________________________________
+
+Passenger.VATime                            1.4997     .02236     .51215     6.6413       4928    
+Passenger.NVATime                           .00000     .00000     .00000     .00000       4928    
+Passenger.WaitTime                          4.2276     (Corr)     .00000     13.253       4928    
+Passenger.TranTime                          .00000     .00000     .00000     .00000       4928    
+Passenger.OtherTime                         .00000     .00000     .00000     .00000       4928    
+Passenger.TotalTime                         5.7274     (Corr)     .66496     15.033       4928    
+Personal check queue I.Queue.WaitingTime    1.7506     .51327     .00000     7.4360       1322    
+Personal check queue III.Queue.WaitingTime  1.5234     (Corr)     .00000     6.8260       1221    
+Personal Check queue II.Queue.WaitingTime   1.6300     (Corr)     .00000     7.2481       1291    
+Personal check queue 4.Queue.WaitingTime    1.4876     (Corr)     .00000     7.2240       1098    
+ID Check process.Queue.WaitingTime          2.6175     (Corr)     .00000     11.618       4947    
+
+                                     DISCRETE-CHANGE VARIABLES
+
+Identifier                                  Average   Half Width  Minimum    Maximum   Final Value
+___________________________________________________________________________________________________
+
+Passenger.WIP                               28.476     (Corr)     .00000     72.000     22.000    
+ID server 4.NumberBusy                      .93219     (Corr)     .00000     1.0000     1.0000    
+ID server 4.NumberScheduled                 1.0000     (Insuf)    1.0000     1.0000     1.0000    
+ID server 4.Utilization                     .93219     (Corr)     .00000     1.0000     1.0000    
+ID server 1.NumberBusy                      .93397     (Insuf)    .00000     1.0000     1.0000    
+ID server 1.NumberScheduled                 1.0000     (Insuf)    1.0000     1.0000     1.0000    
+ID server 1.Utilization                     .93397     (Insuf)    .00000     1.0000     1.0000    
+ID server 3.NumberBusy                      .93665     (Corr)     .00000     1.0000     1.0000    
+ID server 3.NumberScheduled                 1.0000     (Insuf)    1.0000     1.0000     1.0000    
+ID server 3.Utilization                     .93665     (Corr)     .00000     1.0000     1.0000    
+ID server 2.NumberBusy                      .92805     (Corr)     .00000     1.0000     1.0000    
+ID server 2.NumberScheduled                 1.0000     (Insuf)    1.0000     1.0000     1.0000    
+ID server 2.Utilization                     .92805     (Corr)     .00000     1.0000     1.0000    
+Personal Check 1.NumberBusy                 .99716     (Insuf)    .00000     1.0000     1.0000    
+Personal Check 1.NumberScheduled            1.0000     (Insuf)    1.0000     1.0000     1.0000    
+Personal Check 1.Utilization                .99716     (Insuf)    .00000     1.0000     1.0000    
+Personal check queue IV.NumberBusy          .82385     (Insuf)    .00000     1.0000     1.0000    
+Personal check queue IV.NumberScheduled     1.0000     (Insuf)    1.0000     1.0000     1.0000    
+Personal check queue IV.Utilization         .82385     (Insuf)    .00000     1.0000     1.0000    
+Personal check III.NumberBusy               .92513     (Insuf)    .00000     1.0000     1.0000    
+Personal check III.NumberScheduled          1.0000     (Insuf)    1.0000     1.0000     1.0000    
+Personal check III.Utilization              .92513     (Insuf)    .00000     1.0000     1.0000    
+Personal check II.NumberBusy                .97872     (Insuf)    .00000     1.0000     1.0000    
+Personal check II.NumberScheduled           1.0000     (Insuf)    1.0000     1.0000     1.0000    
+Personal check II.Utilization               .97872     (Insuf)    .00000     1.0000     1.0000    
+Personal check queue I.Queue.NumberInQueue  2.3335     .56913     .00000     9.0000     3.0000    
+Personal check queue III.Queue.NumberInQue  1.8753     .56415     .00000     9.0000     3.0000    
+Personal Check queue II.Queue.NumberInQueu  2.1233     .56497     .00000     9.0000     3.0000    
+Personal check queue 4.Queue.NumberInQueue  1.6466     .57045     .00000     9.0000     2.0000    
+ID Check process.Queue.NumberInQueue        13.042     (Corr)     .00000     59.000     3.0000    
+
+                                             OUTPUTS
+
+Identifier                                   Value
+_____________________________________________________________
+
+Passenger.NumberIn                          4950.0    
+Passenger.NumberOut                         4928.0    
+ID server 4.NumberSeized                    1254.0    
+ID server 4.ScheduledUtilization            .93219    
+ID server 1.NumberSeized                    1246.0    
+ID server 1.ScheduledUtilization            .93397    
+ID server 3.NumberSeized                    1191.0    
+ID server 3.ScheduledUtilization            .93665    
+ID server 2.NumberSeized                    1256.0    
+ID server 2.ScheduledUtilization            .92805    
+Personal Check 1.NumberSeized               1322.0    
+Personal Check 1.ScheduledUtilization       .99716    
+Personal check queue IV.NumberSeized        1098.0    
+Personal check queue IV.ScheduledUtilizati  .82385    
+Personal check III.NumberSeized             1221.0    
+Personal check III.ScheduledUtilization     .92513    
+Personal check II.NumberSeized              1291.0    
+Personal check II.ScheduledUtilization      .97872    
+System.NumberOut                            4928.0    
+

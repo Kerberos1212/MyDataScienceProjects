@@ -1,0 +1,296 @@
+---
+title: "HOMEWORK 7. ISYE 6501"
+author: "Guillermo de la Hera Casado"
+date: "October 5th, 2019"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(include=FALSE)
+```
+
+
+```{r}
+library(ggplot2)
+library(randomForest)
+library(rpart)
+library(ggcorrplot)
+library(GGally)
+library(rpart.plot)
+library(pscl)
+library(pROC)
+library(caTools)
+```
+
+
+# Fit a regression tree model to Crime data:
+
+Let's first input the *Crime* data:
+
+```{r include = TRUE}
+set.seed(101) # Set Seed so that same sample can be reproduced in future also
+usCrime <- read.table("uscrime.txt", header = TRUE, sep = "\t")
+```
+
+Now let's fit a regression tree model by using the *rpart* library. As this is a regression problem, we will set *method = anova*:
+```{r include = TRUE}
+treeModel <- rpart(Crime~., data = usCrime, method = 'anova')
+printcp(treeModel)
+rsq.rpart(treeModel)
+rpart.plot(treeModel, box.palette="RdBu", shadow.col = "gray", nn=TRUE, extra = 101)
+```
+
+As we can see in the summary, *xerror*, that is the cross validation error, gets to the lowest level for **CP = 0.148143**. **That's for 1 split.**
+
+We also see from *rsq.rpart* method that *Apparent* R-squared keeps growing incrementally with number of splits proposed. However, *X Relative* parameter, that is the R-squared value from cross-validation gives the best value **with 1 split**.
+
+We can also see the the tree visualization, with details like data points per node, % of instances on each leaf and the business rule that is applied to the predictors for each split. The plot also shows the predicted regression value that apply per node e.g. those observations with Po1 < 7.7 and Pop<23 will have a predicted crime rate of: *550*
+
+Let's now prune the tree, in order to reduce overfitting in the sample. For that, we will use the *prune* function. The complexity parameter will be the one that minimizes the xerror, pretty much the same value as I said above: **CP = 0.148143**
+
+```{r include = TRUE}
+pruned <- prune(treeModel, cp = treeModel$cptable[which.min(treeModel$cptable[,"xerror"]),
+                                                  "CP"])
+```
+
+The next step is to plot again the tree and understand what has happened during the pruning process:
+
+```{r include = TRUE}
+rpart.plot(pruned, box.palette="RdBu", shadow.col = "gray", nn=TRUE, extra = 101)
+```
+
+As we could expect, the pruned tree has only 1 split by the predictor *Po1*, getting more instances on each leaf and reducing the possibility of overfitting, that is quite nice having in mind the reduced amount of data points available in this set.
+
+Let's interpret the model. We can say that:
+
+* For instances where *Po1* (per capita expenditure on police protection in 1960) is < 7.7, the predicted crime rate will be: **670** (number of offenses per 100,000 population)
+* For instances where *Po1* is > 7.7, the predicted crime rate will be: **1131**
+
+So this takes us to a very interesting reading...there is a positive correlation between more expenditure on police protection and crime rate!. Let's verify that by plotting both variables:
+
+```{r include = TRUE}
+plot(usCrime$Po1, usCrime$Crime)
+```
+
+As we can see, it's quite true...for higher values of Po1 we can see on average higher values of Crime rate.
+Let's take the first row of the dataset to verify that this works, by predicting it's crime rate with the pruned model:
+
+```{r include = TRUE}
+obs <- usCrime[1,]
+print(obs)
+predict <- predict(pruned, obs[,1:15])
+print(round(predict,0))
+```
+
+In this observation, Po1 = 5.8. Therefore as per the pruned model, it's predicted value should be 670, because 5.8 < 7.7. When we look at the predicted value, we can see that our understanding is correct.
+
+# Fit a Random Forest model to Crime data:
+
+Let's create a Random Forest model with default parameters:
+```{r include = TRUE}
+rf <- randomForest(Crime ~ ., data = usCrime, importance = TRUE)
+rf
+plot(rf)
+```
+
+As we can see by default a forest of 500 trees will be created and 5 variables will be used per split. It also recognizes automatically that we want to have a regression model, likely because it identifies the response variable as continuous. 
+
+The outcome also states that the model explains 42.83% of the variance. Quite conveniently, random forest sets automatically some data points aside of the training set in order to validate the quality of the predictions. Those data points are called **out-of-bag** predictions. Unexplained variance would be to due true random behaviour or lack of fit.
+
+We can also see a lot of error reduction by using at least 100 trees in the model. The incremental benefit of going above and beyond that number is not great for this specific dataset, therefore we assume we can use 100 trees as reference.
+
+What about the importance of the predictors?  Let's plot it. As we can see, Po1 would be the most relevant predictor for the model - meaning that if we drop it - we would see a huge % increase in MSE / reduction of accuracy. This speaks to the result that we had from the CART model, where the same variable was also used to build the first split.
+
+```{r include = TRUE}
+importance(rf)
+varImpPlot(rf, sort=TRUE)   
+```
+     
+Would we get same or better outcomes with different values of *mtry*? Probably this should be answered through cross-validation. For that, we will use the very handy function **rfcv** using 5 folds and testing the following vaues of mtry: 15, 8, 4, and 1:
+
+```{r include = TRUE}
+rfcv <- rfcv(trainx = usCrime[,1:15], trainy =  usCrime[,16], cv.fold = 5, 
+             mtry = function(p) max(1, floor(sqrt(p)))) 
+rfcv$error.cv
+```
+
+As we can see from the results, the cross-validation error is minimized when we use 8 variables on each split. Let's build a final randomForest model with 100 trees and *mtry=8*. We will compare the % of variance explained vs the default model:
+
+```{r include = TRUE}
+rf2 <- randomForest(Crime ~ ., data = usCrime, importance = TRUE, mtry=8, ntree=100)
+rf2
+```
+
+From the outcome we can see that the performance of the new model doesn't seem to improve in terms of % variance explained vs the default model (41.81% in new model vs 42.83% in default). We will then continue with the default model.
+
+The last question is, could we get the same performance with less predictors? In theory, if we remove the less important predictors from the model, the % of variance explained wouldn't be much worse...Let's try it. We will take out of the model: *Ineq*, *U1*,*U2* and *M.F* and see:
+
+```{r include = TRUE}
+rfSimple <- randomForest(Crime ~ Po1 + Po2 + NW + Prob + Time + Wealth + M + Ed + LF + Pop + So, 
+                         data = usCrime, importance = TRUE)
+rfSimple
+```
+
+Very interesting! Even taking out these 4 predictors, the % of variance explained keeps at the same level!. In other words, the following predictors don't seem to be relevant for the regression model:
+
+* Ineq: % of families earning below half the median income
+* U1: unemployment rate of urban males 14-24
+* U2: unemployment rate of urban males: 35-39
+* M.F: number of males per 100 females.
+
+# Describe a situation when Logistic Regression woud be appropiate and mention few predictors;
+I work for a large Pay-TV company in Africa. It's a prepaid business, meaning that on a monthly basis each customer goes through the decision of paying for the package renewal or not.
+
+The ability of predicting the risk of customers to disconnect on due date is priceless in this business, as dormancy is a key issue and drops the ARPU received from the subscribers.
+
+Logistic Regression does help on this task, as we are interested in measuring risk as a "percentage of disconnection likelihood". Therefore we want to use probabilities, not binary solutions.
+
+Regarding predictors, we currently use some as follows:
+
+* Disconnection day of week
+* Disconnection day of month
+* Activity rate over the last 6 months
+* Package type
+
+# Logistic Regression exercise
+
+## Find good prediction model for whether credit applicants are good credit risks or not
+
+Let's load the data. We will find 1000 observations, 20 predictors and one response variable.
+```{r include = TRUE}
+germanCredit <- read.table("germancredit.txt", header = FALSE)
+str(germanCredit)
+```
+
+
+As we are new to this dataset, it would be interesting to run *corrplot* and start undertanding the relationship between variables:
+
+```{r include = TRUE}
+corr <- round(cor(germanCredit[, c("V16", "V18", "V13", "V8", "V5", "V2")]), 1)
+ggcorrplot(corr, method = "circle")
+```
+
+There is a significant positive correlation between V2 (credit duration in months) and V5 (credit amount). There is also an interesting negative correlation between V5 (credit amount) and V8 (installment rate in percentage of disposable income)
+
+As part of our data preparation efforts, the *binomial family* requires the dependent variable to be mapped to [0,1] values:
+
+* As it is now, 1 represents good credit rate, 2 represents bad credit rate.
+* Let's make it become 0 for good credit rate and 1 for bad credit rate
+
+We will keep 25% of the data aside to test our predictions:
+
+```{r include = TRUE}
+germanCredit$V21 <- apply(germanCredit, 1, function(x) {ifelse(x[21] == 1, 0, 1)})
+sample <- sample.split(germanCredit$V21, SplitRatio = 0.75)
+trainSet <- subset(germanCredit, sample == TRUE)
+testSet <- subset(germanCredit, sample == FALSE)
+```
+
+Let's run the logistic regression model on the dataset in order to gain more insights on the relationship between predictors and response:
+
+```{r include = TRUE}
+creditlm <- glm(V21~., data = trainSet, family=binomial(link="logit"))
+summary(creditlm)
+```
+
+The AIC of the model is: **765*. The below is the list of predictors that are statistically significant at 95% confidence level:
+
+* V1A12: status of existing checking account - 0 <= ... < 200 DM
+* V1A14: no checking account
+* V2: Duration in month
+* V3A34: critical account/ other credits existing (not at this bank)
+* V4A41: purpose: car (used)
+* V4A42: purpose: furniture/equipment
+* V4A43: purpose: radio/television
+* V4A49: purpose: business
+* V5: Credit amount
+* V6A62: savings account - 100 <= ... < 500 DM
+* V6A64: savings account - >= 1000 DM
+* V6A65: savings account - unknown/ no savings account
+* V8: Installment rate in percentage of disposable income
+* V9a93: male single
+* V14a143: none installment plans
+* V20a202: no foreign worker
+
+
+While no exact equivalent to the R2 of linear regression exists, the McFadden R2 index can be used to assess the model fit. 
+
+Logistic regression models are fitted using the method of maximum likelihood - i.e. the parameter estimates are those values which maximize the likelihood of the data which have been observed. McFadden's R squared measure is defined as: *1 - (log(Lc) / log(Lnull))*, where Lc denotes the (maximized) likelihood value from the current fitted model, and Lnull denotes the corresponding value but for the null model - the model with only an intercept and no covariates.
+
+```{r include = TRUE}
+pR2(creditlm)
+```
+
+Let's now include only those predictors who were detected as significant, and make a new model based on them only. We will compare the improvements in AIC and McFadden R2.
+
+```{r include = TRUE}
+creditlmSimple <- glm(V21~V1+V2+V3+V4+V5+V6+V8+V9+V14+V20, 
+                      data = trainSet, family=binomial(link="logit"))
+summary(creditlmSimple)
+```
+
+```{r include = TRUE}
+pR2(creditlmSimple)
+```
+
+Mc Fadden R squared metric decreases from 0.266 to 0.246. However, this can be biased as the formula doesn't account for the benefits on complexity reduction like the adjusted R-Squared metric.
+
+AIC decreases from 765 to 749. What's the likelihood of the default model to be better than the simplified model? As per the formula explained by Dr. Sokol, just only: e^ (749-765/2) = 0.03%. **Therefore we will stick to our simplified model**
+
+
+Let's make the predictions for our test set based on the simplified model and compute the Area Under the Curve. We will set up *type = "response"* in order to get probabilities:
+
+```{r include = TRUE}
+predicted <- predict(creditlmSimple, testSet, type = 'response')
+print(head(predicted))
+roc <- roc(testSet$V21, predicted)
+plot(roc, print.auc=TRUE)
+```
+
+The model does a pretty good job with AUC = 0.79. **This means that 79% of the times it will provide higher risk of bad credit to a random customer with bad credit, vs a random customer with good credit**
+
+## Determine a good threshold probability
+We know that incorrectly classifying a bad customer as good is 5 times worse than classifying a good customer as bad. This is very important as we know that False Negatives (predicting that a customer is good credit when is bad credit) is the parameter to reduce. 
+
+Therefore, let's use **sensitivity: TP/ (TP + FN) as our key metric**. It will guarantee that we maximize true positives (those who are bad credit being identified as bad credit) and also drop FN to the minimum (those who are bad credit being incorrectly identified as good credit). 
+
+As a side effect, probably this will cause some increase in False Positives (those who are good credit being incorrectly identified as bad) but they don'e penalize that much / the company can always treat FPs manually on a 1 to 1 basis to then discern if that'FP is correct or not. Let's explore the impact of modifying the threshold in the confusion matrix (caret package). Let's remember to define *positive=1*, so that the caret knows how to identify the positive instance:
+
+**Threshold 50%**
+
+```{r include = TRUE}
+predicted <- predict(creditlmSimple, testSet, type = "response")
+class_prediction_50 <- ifelse(predicted> 0.50,1,0)
+caret::confusionMatrix(table(class_prediction_50, testSet$V21), positive = "1")
+```
+
+As we can see, sensitivity is quite low, at: 0.507. If we assume the cost function, then the cost for our mistakes would be: FN [37] X 5 + FP [19] x 1 = 204.
+
+**Threshold 30%**
+```{r include = TRUE}
+predicted <- predict(creditlmSimple, testSet, type = "response")
+class_prediction_30 <- ifelse(predicted> 0.3,1,0)
+caret::confusionMatrix(table(class_prediction_30, testSet$V21), positive = "1")
+```
+Reducing the threshold results on higher sensitivity, at 0.706. The cost function for our mistakes would be: FN [22] X 5 + FP [46] x 1 = 156. 
+
+**Threshold 10%**
+```{r include = TRUE}
+predicted <- predict(creditlmSimple, testSet, type = "response")
+class_prediction_10 <- ifelse(predicted> 0.1,1,0)
+caret::confusionMatrix(table(class_prediction_10, testSet$V21), positive = "1")
+```
+Reducing the threshold results on higher sensitivity, at 0.92. The cost function for our mistakes would be: FN [6] X 5 + FP [102] x 1 = 132. 
+
+**Threshold 5%**
+```{r include = TRUE}
+predicted <- predict(creditlmSimple, testSet, type = "response")
+class_prediction_5 <- ifelse(predicted> 0.05,1,0)
+caret::confusionMatrix(table(class_prediction_5, testSet$V21), positive = "1")
+```
+Reducing the threshold results on higher sensitivity, at 0.96. The cost function for our mistakes would be: FN [3] X 5 + FP [135] x 1 = 150.
+Therefore we can see that making threshold < 10% doesn't bring better cost function results, as FP are just too high.
+
+**We will then agree that threshold for this exercise should be marked at 10%**
+
+

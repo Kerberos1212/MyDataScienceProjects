@@ -1,0 +1,130 @@
+---
+title: "HOMEWORK 6. ISYE 6501"
+author: "Guillermo de la Hera Casado"
+date: "September 28th, 2019"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(include=FALSE)
+```
+
+
+```{r}
+library(ggplot2)
+library(DAAG)
+library(outliers)
+library(ggpubr)
+library(GGally)
+library(ggcorrplot)
+```
+
+
+# Question 9.1. Principal Components Analysis
+
+## Exploratory analysis
+
+From the Grubbs test performed in HW3 with this data, we learnt that the value: *1993* could be potentially an outlier with p value = 0.079. 
+
+However, since we will use for this homework confidence level = 95%, we cannot reject the null hypothesis [value is not an outlier].
+
+Another check we learnt about is to ensure that the response is normally distributed. Let's apply Q-Q plot to investigate that and see whether a Box-Cox transformation is required: 
+
+```{r include = TRUE}
+set.seed(101) # Set Seed so that same sample can be reproduced in future also
+usCrime <- read.table("uscrime.txt", header = TRUE, sep = "\t")
+print(grubbs.test(usCrime$Crime, type = 10, two.sided = FALSE))
+ggqqplot(usCrime$Crime)
+```
+
+It seems that the majority of data is normally distributed with the exception of the outliers, so we will move ahead without any modification on the data. Before applying PCA, let's investigate the collinearity of the predictors.
+
+From the Correlation Plot we can see the following:
+
+* There is a high positive correlation between Po1 and Po2
+* There is a high negative correlation between Wealth and Ineq
+
+```{r include = TRUE}
+corr <- round(cor(usCrime), 1)
+ggcorrplot(corr, method = "circle")
+#ggpairs(usCrime)
+```
+
+These facts can be confirmed with a ggpairs plot:
+
+```{r include = TRUE}
+ggpairs(usCrime, columns = c("Po1","Po2","Ineq", "Wealth"))
+print(head(usCrime[,-c(2,16)]))
+```
+
+## Apply PCA and create a linear regression model with most relevant Principal Components
+
+As per stated in office hours, PCA may not work well with binary predictors. Therefore I have removed the second column and the response
+variable and input the remaining into the PCA model. I have also scaled the data to obtain unit variance:
+
+```{r include = TRUE}
+test_point <- data.frame(M = 14.0, Ed = 10.0, Po1 = 12.0, Po2 = 15.5,
+                         LF = 0.640, M.F = 94.0, Pop = 150, NW = 1.1,
+                         U1 = 0.120, U2 = 3.6, Wealth = 3200, Ineq = 20.1,
+                         Prob = 0.040, Time = 39.0)
+PCA <- prcomp(usCrime[,-c(2, 16)], scale = TRUE, center =TRUE)
+test_scaled <- (test_point - PCA$center)/PCA$scale
+summary(PCA) 
+screeplot(PCA, type = "lines", col = "blue",npcs=14)
+```
+
+As we can see in the summary (and also confirmed by the Scree Plot):
+
+* the first 4 principal components cover the majority of the variance -> PC1 + PC2 + PC3 + PC4 = 80% cumulative proportion of variance. 
+* Adding PC5 and PC6 would explain 90% of the variance.  
+* Adding PC7 to PC14 would provide 10% additional, so not worth it in terms of complexity added.
+
+Trying the model with the 4 most important Principal Components yielded a very low Adjust R Squared result: **0.21**
+Let's detail here the results if we use **the first 6 Principal Components**:
+
+```{r include = TRUE}
+PC <- PCA$x[,1:6]
+usCrimePC <- cbind(PC, usCrime[,16])
+modelPCA <- lm(V7~., data = as.data.frame(usCrimePC))
+summary(modelPCA)
+```
+
+Adjusted R-Squared comes at **0.591**, that is less than:
+
+* what I achieved in Homework 5 by using a linear regression on the training set, with the parameters with <0.1 p-value, so: M, Ed, Ineq, Prob, Po1 and U2 (**0.73**)
+* what I achieved in Homework 5 by using cross validation, on parameters with <0.1 p-value, so: M, Ed, Ineq, Prob, Po1, U2 (**0.621**)
+
+The outcome is quite surprising as I expected PCA to deliver a higher Adjusted R-Squared by removing colinearity. The model estimates that PC3, PC4 and PC6 are not statistically significant, with very high p-values. Let's try to adjust the model to only use the following: PC1, PC2, PC5:
+
+```{r include = TRUE}
+modelPCA <- lm(V7~PC1+PC2+PC5, data = as.data.frame(usCrimePC))
+summary(modelPCA)
+print(modelPCA$coefficients)
+```
+
+The adjusted R-Squared comes quite similar, at **0.595**. Let's then use this model with 3 Principal Components and try to specify it in terms of its original variables, as it's simpler.
+
+## Specify the chosen Regression Model in terms of its original variables.
+
+Let's get the Principal Component coefficients explained in terms of original values and make the prediction for our scaled test point:
+```{r include = TRUE}
+PC1_original <- modelPCA$coefficients[2] %*% PCA$rotation[,1]
+PC2_original <- modelPCA$coefficients[3] %*% PCA$rotation[,2]
+PC5_original <- modelPCA$coefficients[4] %*% PCA$rotation[,5]
+print(PCA$rotation[,1])
+print(PC1_original)
+predicted <- modelPCA$coefficients[1] + rowSums(PC1_original * test_scaled) +
+  rowSums(PC2_original * test_scaled) + 
+  rowSums(PC5_original * test_scaled)
+print(predicted)
+
+```
+
+
+As we can see, each PC can decomposed on the linear combination of the original variables by using the relevant eigenvector.
+
+The predicted value is: **1433**. If we look at the Crime response distribution, we can see that the value still falls within the upper whisker [Q3, Q3 + 1.5IQR] and it's not considered an outlier.
+
+```{r include = TRUE}
+ggplot(data=usCrime, aes(x="", y = usCrime$Crime)) + geom_boxplot()
+```

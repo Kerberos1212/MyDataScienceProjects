@@ -1,0 +1,45 @@
+"Statistic Name","Statistic Type","Database Data Type","Database Category","Database Identifier","Rep 1"
+"ID server 1.NumberSeized","OUTPUT VALUE","Total Number Seized","Resource","ID server 1",26
+"ID server 1.ScheduledUtilization","OUTPUT VALUE","Scheduled Utilization","Resource","ID server 1",0.963884789229534
+"ID server 2.NumberSeized","OUTPUT VALUE","Total Number Seized","Resource","ID server 2",25
+"ID server 2.ScheduledUtilization","OUTPUT VALUE","Scheduled Utilization","Resource","ID server 2",0.995132279911812
+"ID server 3.NumberSeized","OUTPUT VALUE","Total Number Seized","Resource","ID server 3",27
+"ID server 3.ScheduledUtilization","OUTPUT VALUE","Scheduled Utilization","Resource","ID server 3",0.994181180996656
+"Passenger.NumberIn","OUTPUT VALUE","Number In","Entity","Passenger",116
+"Passenger.NumberOut","OUTPUT VALUE","Number Out","Entity","Passenger",50
+"Personal Check 1.NumberSeized","OUTPUT VALUE","Total Number Seized","Resource","Personal Check 1",28
+"Personal Check 1.ScheduledUtilization","OUTPUT VALUE","Scheduled Utilization","Resource","Personal Check 1",0.994602155393094
+"Resource 1.NumberSeized","OUTPUT VALUE","Total Number Seized","Resource","Resource 1",24
+"Resource 1.ScheduledUtilization","OUTPUT VALUE","Scheduled Utilization","Resource","Resource 1",0.897735806138486
+"System.NumberOut","OUTPUT VALUE","Number Out","System","System",50
+"ID Check process.Queue.NumberInQueue","DSTAT AVERAGE","Number Waiting","Queue","ID Check process.Queue",19.6577758097201
+"ID Check process.Queue.WaitingTime","TALLY AVERAGE","Waiting Time","Queue","ID Check process.Queue",6.66610922385609E-02
+"ID server 1.NumberBusy","DSTAT AVERAGE","Number Busy","Resource","ID server 1",0.963884789229534
+"ID server 1.NumberScheduled","DSTAT AVERAGE","Number Scheduled","Resource","ID server 1",1
+"ID server 1.Utilization","DSTAT AVERAGE","Instantaneous Utilization","Resource","ID server 1",0.963884789229534
+"ID server 2.NumberBusy","DSTAT AVERAGE","Number Busy","Resource","ID server 2",0.995132279911812
+"ID server 2.NumberScheduled","DSTAT AVERAGE","Number Scheduled","Resource","ID server 2",1
+"ID server 2.Utilization","DSTAT AVERAGE","Instantaneous Utilization","Resource","ID server 2",0.995132279911812
+"ID server 3.NumberBusy","DSTAT AVERAGE","Number Busy","Resource","ID server 3",0.994181180996656
+"ID server 3.NumberScheduled","DSTAT AVERAGE","Number Scheduled","Resource","ID server 3",1
+"ID server 3.Utilization","DSTAT AVERAGE","Instantaneous Utilization","Resource","ID server 3",0.994181180996656
+"Passenger.NVATime","TALLY AVERAGE","NVA Time","Entity","Passenger",0
+"Passenger.OtherTime","TALLY AVERAGE","Other Time","Entity","Passenger",0
+"Passenger.TotalTime","TALLY AVERAGE","Total Time","Entity","Passenger",0.114170668708942
+"Passenger.TranTime","TALLY AVERAGE","Transfer Time","Entity","Passenger",0
+"Passenger.VATime","TALLY AVERAGE","VA Time","Entity","Passenger",2.74283750380968E-02
+"Passenger.WaitTime","TALLY AVERAGE","Wait Time","Entity","Passenger",0.086742293670845
+"Passenger.WIP","DSTAT AVERAGE","WIP","Entity","Passenger",32.1188859291684
+"Personal Check 1.NumberBusy","DSTAT AVERAGE","Number Busy","Resource","Personal Check 1",0.994602155393094
+"Personal Check 1.NumberScheduled","DSTAT AVERAGE","Number Scheduled","Resource","Personal Check 1",1
+"Personal Check 1.Utilization","DSTAT AVERAGE","Instantaneous Utilization","Resource","Personal Check 1",0.994602155393094
+"personal check queue 1.NumberInQueue","DSTAT AVERAGE","Number Waiting","Queue","personal check queue 1",0
+"personal check queue 2.NumberInQueue","DSTAT AVERAGE","Number Waiting","Queue","personal check queue 2",0
+"personal check queue 3.NumberInQueue","DSTAT AVERAGE","Number Waiting","Queue","personal check queue 3",0
+"Personal check queue I.Queue.NumberInQueue","DSTAT AVERAGE","Number Waiting","Queue","Personal check queue I.Queue",4.11916742668859
+"Personal check queue I.Queue.WaitingTime","TALLY AVERAGE","Waiting Time","Queue","Personal check queue I.Queue",3.61237525575266E-02
+"Personal Check queue II.Queue.NumberInQueue","DSTAT AVERAGE","Number Waiting","Queue","Personal Check queue II.Queue",3.49640648109009
+"Personal Check queue II.Queue.WaitingTime","TALLY AVERAGE","Waiting Time","Queue","Personal Check queue II.Queue",3.43788806986389E-02
+"Resource 1.NumberBusy","DSTAT AVERAGE","Number Busy","Resource","Resource 1",0.897735806138486
+"Resource 1.NumberScheduled","DSTAT AVERAGE","Number Scheduled","Resource","Resource 1",1
+"Resource 1.Utilization","DSTAT AVERAGE","Instantaneous Utilization","Resource","Resource 1",0.897735806138486

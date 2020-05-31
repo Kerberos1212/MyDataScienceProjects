@@ -1,0 +1,159 @@
+---
+title: "HOMEWORK 1. ISYE 6501"
+author: "Guillermo de la Hera Casado"
+date: "August 22nd, 2019"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(include=FALSE)
+```
+
+
+```{r}
+library(kernlab)
+library(formattable)
+library(knitr)
+library(kknn)
+```
+
+# Real life application of classification problems.
+I work for a Pay-TV company with headquarters in Africa. Customers pre-pay monthly subscriptions and get channels specialized in different content e.g. football, movies, etc.  
+
+Our clients typically don't renew on time, due to complex transportation networks to payment points and inconvenience to do so during weekends. We identified the need of **predicting which customers are at risk of disconnection** in order to change their behavior with marketing initiatives.  
+
+We usually run Gradient Boosting Classifier as algorithm, probably it will come up later on in this course. Some of the predictors are as per below:  
+
+  * Continuously active tenure (days)
+  * Activity within the last three months (days)
+  * Activity within the last six montnhs (days)
+  * Customer tenure since joining the product (days)
+  * Customer product ARPU ($)
+
+# SVM exercise
+
+## VanillaDot: finding a good classifier
+
+The C parameter tells the SVM optimization how much we want to avoid misclassifying each training example. 
+
+  * For large values of C, the optimization will choose a smaller-margin hyperplane if that hyperplane does a better job of getting all the training points classified correctly. There is a risk of overfitting.
+  
+  * However, a small value of C may make optimizer to look for better generalization (larger-margin separating hyperplane), even if that hyperplane misclassifies more points.There is risk of underfitting.
+  
+  * As per the homework guidelines, the algorithm should be trained with the full dataset and will not be validated with a test set, therefore generalization power is not a concern. We will check how increases in C affect both training accuracy.
+
+```{r}
+set.seed(101) # Set Seed so that same sample can be reproduced in future also
+data <- read.table("credit_card_data-headers.txt", header = TRUE, sep = "\t")
+C_values <- c(0.0001, 0.0003, 0.0005, 0.0007, 0.001, 0.003, 0.005, 0.01, 0.1, 1,100)
+
+AccVanilla <- rep(-1, length(C_values))
+AccPosResVanilla <- rep(-1, length(C_values))
+AccNegResVanilla <- rep(-1, length(C_values))
+
+#Vanilladot optimization
+counter <- 1
+for (cVar in C_values){
+  model <- ksvm(as.matrix(data[,1:10]), as.factor(data[,11]), type = "C-svc", kernel = "vanilladot", C = cVar, scaled = TRUE)
+  pred <- predict(model, data[,1:10]) 
+  confMatrix <- table(pred, data[,11])
+  AccPosResVanilla[counter] <- paste(round(confMatrix[1,1] / sum(confMatrix[,1])*100,1),"%",sep="")
+  AccNegResVanilla[counter] <- paste(round(confMatrix[2,2] / sum(confMatrix[,2])*100,1),"%",sep="")
+  AccVanilla[counter] <- paste(round((1 - model@error)*100,1),"%", sep="")
+    
+  counter <- counter+1
+}
+```
+
+In the following table, three measures are presented for each C value:
+
+  * *Overall accuracy:* (TP+TN)/(TP+TN+FP+FN)
+  * *% positive instances predicted correctly (recall):* TP / (TP+FN)
+  * *% negative instances predicted correctly (specificity):* TN / (TN+FP)
+
+```{r echo = FALSE, include = TRUE, results='asis'}
+kable(data.frame(C_values,AccVanilla,AccNegResVanilla, AccPosResVanilla), col.names = c("C Value","Overall Accuracy", "negative instances predicted correctly", "positive instances predicted correctly"),
+      caption = "Vanilladot. Training Accuracy per C value")
+```
+
+By the look of it, very low values of C makes all the predictions be *yes's*. The consequence is that we are not able
+to predict the negative case, and therefore **we would be approving credit card applications for ALL customers** with the risk that implies.
+
+C value = *3e-03* or *0.003* brings a modest raise in overall accuracy and a massive improvement on our capabilities to predict correctly *no's*, from 74% to 94%. For our business scenario it's very important to reduce False Positives to the very minimum, as we don't want to grant credit cards to customers with bad credit score. *C>0.003* values don't provide much more incremental improvement.  
+
+## VanillaDot: finding the equation for the selected C Value: 0.003
+```{r}
+model <- ksvm(as.matrix(data[,1:10]), as.factor(data[,11]), type = "C-svc", kernel = "vanilladot", C = 0.001, scaled = TRUE)
+coef <- data.frame(round(colSums(model@xmatrix[[1]] * model@coef[[1]]),3))
+coef <- rbind(coef, a0 = c(-model@b))
+colnames(coef) <- c("Coefficients")
+equation <- paste("The equation is:", coef['A1',],"A1 +", coef['A2',],"A2 + ", coef['A3',],"A3 + ", coef['A8',],"A8 + ", coef['A9',],"A9 ", coef['A10',],"A10 + ", coef['A11',],"A11",coef['A12',],"A12",coef['A14',],"A14 + ",coef['A15',],"A15", coef['a0',],"= 0")
+```
+
+```{r echo = FALSE, include = TRUE, results='asis'}
+kable(coef,caption = "VanillaDot. Coefficients for C Value: 0.003")
+equation
+```
+
+## Comparing VanillaDot vs Radial Basis Function Kernel (RBF)
+
+```{r}
+AccRBF <- rep(-1, length(C_values))
+AccPosResRBF <- rep(-1, length(C_values))
+AccNegResRBF <- rep(-1, length(C_values))
+
+counter <- 1
+for (cVar in C_values){
+  model <- ksvm(as.matrix(data[,1:10]), as.factor(data[,11]), type = "C-svc", kernel = "rbfdot", C = cVar, scaled = TRUE)
+  pred <- predict(model, data[,1:10]) 
+  confMatrix <- table(pred, data[,11])
+  AccPosResRBF[counter] <- paste(round(confMatrix[1,1] / sum(confMatrix[,1])*100,1),"%",sep="")
+  AccNegResRBF[counter] <- paste(round(confMatrix[2,2] / sum(confMatrix[,2])*100,1),"%",sep="")
+  AccRBF[counter] <- paste(round((1 - model@error)*100,1),"%", sep="")
+  counter <- counter+1
+}
+```
+
+
+```{r echo = FALSE, include = TRUE, results='asis'}
+kable(data.frame(C_values,AccRBF,AccNegResRBF, AccPosResRBF), col.names = c("C Value","Overall Accuracy", "negative instances predicted correctly", "positive instances predicted correctly"),
+      caption = "RBF. Training Accuracy per C value")
+```
+
+RBF behaves in a different way than VanillaDot. Only when C value gets to **0.1** the training accuracy improves considerably. Also, the higher C value is, the better RBF adapts to training set without any limitation. When C value is **100**, training accuracy is already at **96%, that is much higher than any of the VanillaDot outcomes.**  
+
+Something important to consider is that *sigma* parameter should be tuned as well for RBF, together with *C*. It hasn't be done in this example for simplicity.
+#matrix with nrows = dataset, ncol = k values, to store prediction values
+
+
+# K-nearest-neighbors exercise
+
+For this exercise, both a main loop and a nested one have been created, in order to:
+
+  * Benchmark prediction accuracy for **different K values**. In this case, from k = 1 to k = 10.
+  * For each k value, **calculate the predicted value for each instance in the dataset**. That's done iteratively, through leave-one out cross validation. The predicted value will come as a continuous value. By using 0.5 as threshold, we follow this rule:  *if it's >= 0.5, then it's transformed to 1. If it's <0.5, then it's transformed to 0.*
+  * For each k value, **calculate the overall prediction accuracy** across the dataset.
+  
+```{r}
+k_values <- seq(from = 1, to = 10, by = 1)
+preMatrix <- matrix(0, nrow=nrow(data), ncol=length(k_values))
+
+AccKKNN <- rep(-1, length(k_values))
+
+for(kVar in k_values){
+  
+  for (i in 1:nrow(data)){
+    model <- kknn(R1~., train = data[-i, 1:11], test = data[i, 1:11],  k = kVar, scale = TRUE)
+    preMatrix[i,kVar] <- ifelse(fitted(model)>=0.5, 1, 0)
+  }
+
+  AccKKNN[kVar] <- paste(round((sum(preMatrix[,kVar] == data[,11]) / nrow(data))*100,1),"%",sep="")
+}
+```
+
+```{r echo = FALSE, include = TRUE, results='asis'}
+kable(data.frame("K_value" = k_values, "PredictionAccuracy" = AccKKNN), caption = "KKNN. Training Accuracy per K value", col.names = c("K value", "Overall Accuracy"))
+```
+
+As it can be seen in the above table **K value = 5** provides a great boost in accuracy: *[85.2%]* while still being a reasonable number. In addition, this is an odd number. As a learning doing some research, it seems that *odd numbers are recommended when doing binary classifications, since it eliminates the risk of getting ties e.g. two classes labels achieving the same score.* [More info here, from Analytics Vidhya](https://discuss.analyticsvidhya.com/t/why-to-use-odd-value-of-k-in-knn-algorithm/2704 )
+

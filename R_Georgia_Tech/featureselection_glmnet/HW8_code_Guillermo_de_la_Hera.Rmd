@@ -1,0 +1,203 @@
+---
+title: "HOMEWORK 8. ISYE 6501"
+author: "Guillermo de la Hera Casado"
+date: "October 13th, 2019"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(include=FALSE)
+```
+
+
+```{r}
+library(ggplot2)
+library(ggcorrplot)
+library(MASS)
+library(MuMIn)
+library(glmnet)
+library(DAAG)
+library(caTools)
+```
+
+
+# Reading the data and creating the regression model
+
+Let's first input the *Crime* data:
+
+```{r include = TRUE}
+set.seed(101) # Set Seed so that same sample can be reproduced in future also
+usCrime <- read.table("uscrime.txt", header = TRUE, sep = "\t")
+```
+
+We may also want to check if the predictors are correlated, so that we can understand better the variable selection outcomes:
+
+* There is a strong negative correlation between Wealth and Ineq
+* There is a strong positive correlation between Po1 and Po2
+
+```{r include = TRUE}
+corr <- round(cor(usCrime), 1)
+ggcorrplot(corr, method = "circle")
+```
+
+
+Let's also leave 30% of the rows aside, just for ilustration purposes when computing Adjusted R Square through each method:
+```{r include = TRUE}
+sample <- sample.split(usCrime$Crime, SplitRatio = 0.7)
+trainSet <- subset(usCrime, sample == TRUE)
+testSet <- subset(usCrime, sample == FALSE)
+```
+
+Finally, we are going to fit a regression model with all the variables. As we can see, we have: *Ed, Po1, NW and Ineq* variables as statistically significant at 90% confidence level. These would be potentially variables interesting to keep from a p-value perspective:
+
+```{r include = TRUE}
+full <- lm(Crime~., data = trainSet,na.action = "na.fail")
+summary(full)
+```
+
+# Stepwise regression based on AIC
+
+```{r include = TRUE}
+SR_AIC <- stepAIC(full, direction = "both", trace = FALSE)
+SR_AIC$anova
+
+lm_AIC <- lm(Crime~Ed+Po1+Po2+NW+U1+U2+Ineq+Prob, trainSet)
+pred <- predict(lm_AIC, 
+                testSet[,c("Ed","Po1", "Po2","NW","U1","U2","Ineq","Prob")])
+
+n <- length(testSet$Crime)
+k <- 8
+CV_residual <- pred - testSet$Crime
+SSyy <- sum((testSet$Crime - mean(testSet$Crime))^2)
+SSE <- sum(CV_residual^2)
+Adj_R_Squared <- 1 - ((SSE/n-k) / (SSyy/n-1))
+print(Adj_R_Squared)
+```
+
+The final model that minimizes AIC would be based on the following 8 predictors: **Ed, Po1, Po2, NW, U1, U2, Ineq, Prob**. 
+**The adjusted R-Square based on test set = 0.27**
+
+# Stepwise regression based on BIC
+
+```{r include = TRUE}
+SR_BIC <- step(full, direction = "both", k=log(nrow(usCrime)),trace = FALSE)
+SR_BIC$anova
+
+lm_BIC <- lm(Crime~Ed+Po1+Ineq, trainSet)
+pred <- predict(lm_BIC, testSet[,c("Ed","Po1","Ineq")])
+n <- length(testSet$Crime)
+k <- 3
+CV_residual <- pred - testSet$Crime
+SSyy <- sum((testSet$Crime - mean(testSet$Crime))^2)
+SSE <- sum(CV_residual^2)
+Adj_R_Squared <- 1 - ((SSE/n-k) / (SSyy/n-1))
+print(Adj_R_Squared)
+```
+
+As we know, BIC penalizes more than AIC having a large number of predictors. It's not strange to see that **it only keeps 3 predictors: Ed, Po1, Ineq**.  
+**The Adj R Squared on the training set is only: 0.23**
+
+# Dredging - MuMIn package
+
+Dredging executes automated model selection, testing all different combinations of predictors. Part of the *MuMIn* package, It's more expensive computationally but may provide a comprehensive analytical solution. Let's run it using BIC for ranking and asking also to get the adjusted R-squared metric. We want to display the best model out of all computations:
+
+```{r include = TRUE}
+dredge_BIC <- dredge(full, evaluate = TRUE, rank = "BIC",extra= c("adjR^2"),trace = FALSE)
+summary(get.models(dredge_BIC, 1)[[1]])
+```
+
+As we can see, the best model includes the following predictors: **Ed, Ineq,and  Po1**. It's quite interesting to see that the selection given is the same as the one returned by step BIC! 
+The adjusted R-squared is overestated as it's computed on the training data. We could expect similar performance on the test data as Step BIC.
+
+
+# Lasso
+
+Since the number of rows in our dataset is quite small, We will use the function *cv.glmnet* to run cross validation and determine the best value of lambda for the model (lambda being the regulatization factor). We will also set up alpha = 1 since we want to run Lasso. We also have to determine the family. We will use *gaussian* as we just have one response variable -  we are not interested in studying the relationship between more than 1 response. As the final step, we will set standardize = TRUE in order to have variables on the same units:
+
+```{r include = TRUE}
+lasso <- cv.glmnet(as.matrix(trainSet[,1:15]), trainSet[,16], alpha = 1,
+                   family = "gaussian", standardize = TRUE)
+plot(lasso)
+lasso$lambda.min
+coef(lasso, s = "lambda.min")
+
+yhat0 <- predict(lasso, s=lasso$lambda.min, newx = as.matrix(testSet[,1:15]))
+n <- length(testSet$Crime)
+k <- 9
+CV_residual <- yhat0 - testSet$Crime
+SSE <- sum(CV_residual^2)
+SSyy <- sum((testSet$Crime - mean(testSet$Crime))^2)
+Adj_R_Squared <- 1 - ((SSE/n-k) / (SSyy/n-1))
+Adj_R_Squared
+```
+
+Let's analyze the results. By plotting the MSE trend on the basis of log lambda. By looking at *lambda.min* variable, we can see that the best value of lambda that minimizes MSE is: 16.6. We can also see that this optimal configuration is based only on 9 predictors: **M,  Ed, Po1, M.F, Pop, NW, U2, Ineq, Prob**. **The adjusted R Squared obtained on the test data is: 0.367**
+
+If we wanted to see how the coefficients shrink to zero when lambda increases, we can easily fit the model with *glmnet* function:
+
+```{r include = TRUE}
+lassot <- glmnet(as.matrix(trainSet[,1:15]), trainSet[,16], alpha = 1,
+                   family = "gaussian", standardize = TRUE)
+plot(lassot, xvar="lambda", label=TRUE)
+```
+As seen in the plot, coefficient values are shrinked to zero slowly but surely, when lambda is increased.
+
+# Ridge
+We will use *alpha = 0* to set up a Ridge regression. Let's look at the plot:
+
+```{r include = TRUE}
+ridge<- cv.glmnet(as.matrix(trainSet[,1:15]), trainSet[,16], alpha = 0,
+                   family = "gaussian", standardize = TRUE)
+plot(ridge)
+ridge$lambda.min
+coef(ridge, s = "lambda.min")
+
+yhat0 <- predict(ridge, s=ridge$lambda.min, newx = as.matrix(testSet[,1:15]))
+n <- length(testSet$Crime)
+k <- 15
+CV_residual <- yhat0 - testSet$Crime
+SSE <- sum(CV_residual^2)
+SSyy <- sum((testSet$Crime - mean(testSet$Crime))^2)
+Adj_R_Squared <- 1 - ((SSE/n-k) / (SSyy/n-1))
+Adj_R_Squared
+```
+
+As we see, Ridge never shrinks the coefficient to zero value, **that's why the number of coefficients remains = 15** for any lambda selection. The best value of lambda that minimizes MSE is: 18.69 . **The adjusted R Squared obtained on the test set with this config is: 0.548**
+
+Let's check this fact looking at the following plot:
+
+```{r include = TRUE}
+ridget <- glmnet(as.matrix(trainSet[,1:15]), trainSet[,16], alpha = 0,
+                   family = "gaussian", standardize = TRUE)
+plot(ridget, xvar="lambda", label=TRUE)
+```
+
+Easy to see here as well how the coefficients get very near to zero value, but none equal zero regardless of the lambda value.
+
+# Elastic Net
+Let's try alpha: 0.5, as a good example of Elastic Net, combining both Lasso and Ridge at the same rate. 
+```{r include = TRUE}
+elNet<- cv.glmnet(as.matrix(trainSet[,1:15]), trainSet[,16], alpha = 0.5,
+                   family = "gaussian", standardize = TRUE)
+plot(elNet)
+elNet$lambda.min
+coef(elNet, s = "lambda.min")
+
+yhat0 <- predict(elNet, s=elNet$lambda.min, newx = as.matrix(testSet[,1:15]))
+n <- length(testSet$Crime)
+k <- 10
+CV_residual <- yhat0 - testSet$Crime
+SSE <- sum(CV_residual^2)
+SSyy <- sum((testSet$Crime - mean(testSet$Crime))^2)
+Adj_R_Squared <- 1 - ((SSE/n-k) / (SSyy/n-1))
+Adj_R_Squared
+```
+
+As we can see, it shrinks the value of the coefficients (Ridge) but also shrinks to zero the coefficient of the variables:  *So, Po2, LF, Wealth, Time * (Lasso)
+**The adjusted R-Squared obtained on the training set from this config is: 0.45**
+
+#Summary
+
+* Going through the assignment, it can be noted that those methods with a more restrictive regularization pattern (BIC, Lasso) or too computationally expensive on a small set (Dredging) are the ones scoring the lowest adjusted R-Squared on the test data. The reason may be just the size of the dataset. It's very easy to overfit and those methods may be dropping variables that are still making an impact on the response, even with small coefficients. Not surprisingly the best score is given by Ridge, whose purpose is to generalize the model by shrinking the coefficients without dropping the variables
+
+* Looking at the variable selection given by the different algorithms, we can see that  **Ed, Ineq, Po1** are kept across all of them. It's also visible that variables like **Time, Wealth, Po2** are not really important across the board. The reason may be that Po2 correlates to Po1, and Wealth to Ineq. If Ineq and Po1 are selected as important variables, the other two loses predictive power.

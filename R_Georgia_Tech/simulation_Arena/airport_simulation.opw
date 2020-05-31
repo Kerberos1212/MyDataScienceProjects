@@ -1,0 +1,22 @@
+[RESOURCES]
+ID server 4
+ID server 1
+ID server 3
+ID server 2
+Personal Check 1
+Personal check queue IV
+Personal check III
+Personal check II
+[VARIABLES]
+System exit.NumberOut
+Passengers arrive to ID check queue.NumberOut
+ID Check process.NumberOut
+ID Check process.NumberIn
+Personal Check queue II.NumberOut
+Personal check queue III.NumberOut
+Personal check queue III.NumberIn
+Personal Check queue II.NumberIn
+Personal check queue 4.NumberIn
+Personal check queue 4.NumberOut
+Personal check queue I.NumberIn
+Personal check queue I.NumberOut

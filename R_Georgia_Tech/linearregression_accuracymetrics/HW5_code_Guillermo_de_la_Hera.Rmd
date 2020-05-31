@@ -1,0 +1,123 @@
+---
+title: "HOMEWORK 5. ISYE 6501"
+author: "Guillermo de la Hera Casado"
+date: "September 24th, 2019"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(include=FALSE)
+```
+
+
+```{r}
+library(ggplot2)
+library(DAAG)
+```
+
+
+# Question 8.1. Describe a situation for which linear regression would be appropiate. List up to 5 predictors
+
+I work for a large Pay-TV company in Africa. Regression analysis is a very relevant technique to predict the Lifetime Value of our customers. That's how much revenue can be extracted from that subscriber during overall product consumption up to cancellation. It's a continuous response that can be estimated for future observations from historical beahavior.
+
+Regarding the predictors, I would suggest the following:
+
+* Previous dormancy patterns
+* Tenure
+* The package customer is subscribed to
+* demographics of subscriber
+* Add-ons 
+
+
+# Question 8.2. Use regression to predict the observed crime rate in a city 
+## Building the basic model
+
+From the Grubbs test performed in HW3 with this data, we learnt that the value: *1993* could be potentially an outlier with p value = 0.079. 
+
+However, since we will use for this homework confidence level = 95%, we cannot reject the null hypothesis [value is not an outlier].
+Now we can move on to create the regression model to predict the crime rate, without performing any modification on the dataset:
+
+```{r include = TRUE}
+set.seed(101) # Set Seed so that same sample can be reproduced in future also
+usCrime <- read.table("uscrime.txt", header = TRUE, sep = "\t")
+lm_uscrime <- lm(Crime~., data=usCrime)
+summary(lm_uscrime)
+print(BIC(lm_uscrime))
+print(AIC(lm_uscrime))
+```
+
+From the summary we can infer the following learnings:
+
+* The median residual (difference between predicted value and actual value of crime rate) is: -6.69
+* For few coefficients we can reject the null hypothesis at 95% confidence level. Therefore we say that the following coefficients are meaningful and not equal to zero: **M, Ed, Ineq, Prob**. Then we have **Po1, U2** that are significant at 90% confidence level, so would to keep them in mind.
+* As we can expect Multiple R squared is higher than the adjusted R-squared, since there is more than one predictor. As discussed during office hours we will pay attention to the adjusted R-squared, as it doesn't only speak about reduction of error but also reduction of complexity in the model. That helps to assess whether each extra coefficient added to the model is making a relevant impact in explaining the variance or not vs removing it. Adjusted R squared = 70.78%, that is a great value. It means that the model is able to explain 70.78% of the variance in the response variable, with the current set up.
+* We can also see that the p-value in the F-statistic is quite low. That confirms that at least one of the coefficients in the model is significant.
+
+## Building a simplified model with only statistically relevant predictors
+What if we fit the model only with those coefficients that proved to be significant from 90% confidence level onwards? Let's see the impact on adjusted R-squared, BIC and AIC
+
+```{r include = TRUE}
+lm_uscrime_simple <- lm(Crime~M+Ed+Ineq+Prob+Po1+U2, data=usCrime)
+summary(lm_uscrime_simple)
+print(BIC(lm_uscrime_simple))
+print(AIC(lm_uscrime_simple))
+```
+
+As we can see:
+
+* The median residual (difference between predicted value and actual value of crime rate) is: -19.68
+* Adjusted R-squared increases from 71% to 73%!
+* BIC decreases from 681.48 to 654.97. The difference is: 26.5. As per explained by Dr. Sokol, that means that the simplified model, that has the smaller BIC is **"very likely"** better than the overall model.
+* AIC decreases from 650 to 640. Even though, what's the likelihood of the overall model to be better than the simplified model? As per the formula explained by Dr. Sokol, just only: *e^ (640-650/2)  = 0.7%*
+
+Therefore we can infer that **the simplified model works better on reducing both error and complexity** and we will choose it for the next sections.
+
+
+##Cross validation
+
+The limitation on the above procedure is that we are fitting the model with all the training data and then comparing the actuals vs predicted values to calculate the residuals. That may lead to overfitting.
+
+It would be interesting to calculate the residuals on unseen data (test set) and work out the adjusted R squared coming out of it. For that, we will use the *cv.lm* function in DAAG package, selecting 4 folds.
+
+```{r include = TRUE}
+lm_uscrime_cv <-cv.lm(usCrime, lm_uscrime_simple, m=4)
+```
+
+Let's use the results from the cross validation to calculate SS residuals, SS total and adjusted R-squared:
+```{r include = TRUE}
+n <- length(usCrime$Crime)
+k <- length(lm_uscrime_simple$coefficients)-1
+cvpred = lm_uscrime_cv$cvpred
+CV_residual <- cvpred - usCrime$Crime
+SSyy <- sum((usCrime$Crime - mean(usCrime$Crime))^2)
+SSE <- sum(CV_residual^2)
+Adj_R_Squared <- 1 - (SSE/SSyy) * (n-1) / (n-(k+1))
+print(Adj_R_Squared)
+```
+
+The adjusted R-squared on unseen obervations is **62.1%**. This means that the model is able to explain that percentage of variance on unseen data. It's not as good as the 73% that we got on the training data, but probably much more realistic when the model is tested in a real life scenario.
+
+## Fitting the observation on the best model
+
+The next step will be to predict the value for the required observation, and see where it sits vs overall response distribution.
+
+```{r include = TRUE}
+test_point <- data.frame(M = 14.0, So = 0, Ed = 10.0, Po1 = 12.0, Po2 = 15.5,
+                         LF = 0.640, M.F = 94.0, Pop = 150, NW = 1.1,
+                         U1 = 0.120, U2 = 3.6, Wealth = 3200, Ineq = 20.1,
+                         Prob = 0.040, Time = 39.0)
+
+ggplot(data=usCrime, aes(x="", y = usCrime$Crime)) + geom_boxplot()
+pred_model <- predict(lm_uscrime_simple, test_point)   
+pred_model
+```
+The predicted crime rate for this observation would be: **1304**. Looking at the boxplot for the response value, we can see that the predicted value would be outside of the Interquantile Range (IQR) but **still contained within the whisker** (so between third quantile and third quantile + 1.5*IQR) Therefore the model wouldn't be producing an outlier in this specific case.
+
+## Bonus point - Checking normality of residuals on the simplified model
+Another important bit of testing the regression quality is to verify that the residuals are independent and normally distributed. From the below, we can see that the Standard Residuals of the sample match closely the normal distribution, except for one data point that may likely be the outlier mentioned above.
+
+```{r include = TRUE}
+usCrime.stdres = rstandard(lm_uscrime_simple)
+qqnorm(usCrime.stdres, ylab = "Standarized Residuals", xlab = "Normal Scores", main = "Checking Normality of Residuals")
+qqline(usCrime.stdres)
+```
